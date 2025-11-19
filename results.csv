@@ -1,0 +1,713 @@
+id,name,category,severity,status,message,score,max_score,remediation,reference
+NX-SYS-001,Guest Shell Disabled,System Hardening,CRITICAL,PASS,Insecure configuration correctly absent,10,10,"CRITICAL: Guest Shell is enabled by default and provides network access!
+
+Disable Guest Shell immediately:
+switch(config)# no feature guestshell
+
+Why this is CRITICAL:
+- Guest Shell provides Linux shell access with network connectivity
+- Enabled by default on many NX-OS platforms
+- Can be exploited for lateral movement
+- Provides persistent access point
+- Most organizations don't need Guest Shell
+
+CIS Benchmark: High-risk feature that should be disabled unless explicitly required
+",CIS 1.2.3 | Cisco Hardening Guide | System Hardening | CRITICAL Security Gap #1
+NX-SYS-002,Bash Shell Consent Token Required,System Hardening,HIGH,FAIL,[FAIL] Required configuration not found: terminal password.*consent-token,0,5,"Require consent token for bash shell access:
+switch(config)# terminal password 0 consent-token
+
+This adds an additional authentication layer for bash shell access.
+",Cisco Hardening Guide | System Hardening
+NX-SYS-003,Sudo Password Prompt Enabled,System Hardening,MEDIUM,PASS,Insecure configuration correctly absent,3,3,"Ensure sudo requires password:
+
+Review sudoers file and remove NOPASSWD entries:
+switch# run bash
+bash$ sudo vi /etc/sudoers
+
+Remove or comment out any NOPASSWD lines
+",Cisco Hardening Guide | System Hardening
+NX-SYS-004,FIPS Mode Enabled,System Hardening,MEDIUM,FAIL,[FAIL] Required configuration not found: ^fips mode enable,0,3,"Enable FIPS 140-2 mode:
+switch(config)# fips mode enable
+
+Note: Requires switch reload
+Verify: show fips status
+",Cisco Hardening Guide | System Hardening | CIS 1.3.1
+NX-MP-001,Local User Authentication,User Management,HIGH,PASS,Found: username admin password 5 $5$IFKDEK$1l9o.3JUkGQ4F.QDJcYZ9F99cbkZng2HXcbpORZSvk2 role network-admin,5,5,"Configure local users with Type-5 (SHA-512) encrypted passwords:
+switch(config)# username admin password 5 <encrypted-password> role network-admin
+
+Verify password encryption:
+show running-config | include username
+",Management Plane > User Authentication | CIS 1.1.1
+NX-MP-002,Password Strength Requirements,Password Management,HIGH,FAIL,[FAIL] Required configuration not found: ^password strength-check,0,5,"Enable password strength checking:
+switch(config)# password strength-check
+
+This enforces:
+- Minimum length requirements
+- Character complexity
+- Dictionary checks
+",Management Plane > Password Management | CIS 1.1.2
+NX-MP-003,AAA Authentication Login,AAA Configuration,CRITICAL,PASS,Found: aaa authentication login default group tacacs1 local,10,10,"Configure AAA authentication:
+switch(config)# aaa authentication login default group tacacs+ local
+switch(config)# aaa authentication login console group tacacs+ local
+
+This enables centralized authentication with local fallback
+",Management Plane > AAA | CIS 1.2.1
+NX-MP-004,AAA Authorization Commands,AAA Configuration,HIGH,PASS,Found: aaa authorization commands default group tacacs1 local,5,5,"Configure AAA command authorization:
+switch(config)# aaa authorization commands default group tacacs+ local
+
+This ensures all commands are authorized through AAA
+",Management Plane > AAA | CIS 1.2.2
+NX-MP-005,AAA Accounting,AAA Configuration,HIGH,PASS,Found: aaa accounting default group tacacs1,5,5,"Configure AAA accounting:
+switch(config)# aaa accounting default group tacacs+
+
+This logs all commands executed for audit trails
+",Management Plane > AAA | CIS 1.2.4
+NX-MP-024,AAA Key Encryption Type-6,AAA Configuration,CRITICAL,PASS,"Found: tacacs-server host 10.253.11.233 key 6 ""JDYkTL0d5ivKuXmk3l/Mwl6yuCTU4cEaqSrwfjIYJh2bti8NsA8v85ORQCgs4glHdNSLdBfslQg9t9EkWC4dluLEHO8kl/LNAWgf7QPmooKvfKPTV/W4MhwA"" port 49",10,10,"CRITICAL: Type-7 encryption is easily reversible!
+
+Re-configure AAA keys with Type-6 (AES) encryption:
+switch(config)# tacacs-server host 10.1.1.1 key 6 <strong-key>
+switch(config)# radius-server host 10.1.1.2 key 6 <strong-key>
+
+Verify:
+show running-config | include ""key 6""
+
+Why Type-6 is critical:
+- Type-7: Vigenere cipher (easily cracked, online tools available)
+- Type-6: AES encryption (industry standard, much stronger)
+- Type-0: Plaintext (NEVER use)
+
+This is a CRITICAL security gap that many organizations miss!
+",Cisco Hardening Guide | Management Plane | CRITICAL Security Gap #2
+NX-MP-005AA,TACACS+ Server Timeout Configured,AAA Configuration,CRITICAL,PASS,Found: tacacs-server timeout 30,10,10,"Configure TACACS+ server timeout (global or per-server):
+
+Global timeout:
+switch(config)# tacacs-server timeout 5
+
+Per-server timeout:
+switch(config)# tacacs-server host 10.1.1.1 timeout 5
+
+Recommended value: 3-10 seconds
+- Prevents long delays on server failures
+- Ensures timely fallback to local authentication
+",Management Plane > AAA | CIS 1.2.3
+NX-MP-005AB,TACACS+ Timeout Absolute Value (30 seconds),AAA Configuration,MEDIUM,PASS,Value matches required: 30 seconds,3,3,"Configure TACACS+ timeout to exactly 30 seconds:
+switch(config)# tacacs-server timeout 30
+
+This is the required standard timeout value for AAA server communication.",Management Plane > AAA | Organizational Standard
+NX-MP-006AA,RADIUS Server Timeout Configured,AAA Configuration,HIGH,PASS,Found: radius-server timeout 5,5,5,"Configure RADIUS server timeout (global or per-server):
+
+Global timeout:
+switch(config)# radius-server timeout 5
+
+Per-server timeout:
+switch(config)# radius-server host 10.1.1.1 timeout 5
+
+Recommended value: 3-10 seconds
+",Management Plane > AAA
+NX-MP-006AB,RADIUS Timeout Optimal Range,AAA Configuration,MEDIUM,PASS,Optimal value: 5 seconds (within 3-10 seconds range),3,3,"Adjust RADIUS timeout to optimal range:
+switch(config)# radius-server timeout 5",Management Plane > AAA | Best Practice
+NX-MP-025,TACACS+ Over TLS 1.3,AAA Configuration,HIGH,FAIL,[FAIL] Required configuration not found: tacacs-server.*ssl-version tlsv1.3,0,5,"Configure TACACS+ to use TLS 1.3:
+switch(config)# tacacs-server host 10.1.1.1 ssl-version tlsv1.3
+
+This provides encrypted transport for AAA communications
+",Cisco Hardening Guide | Management Plane
+NX-MP-026,Advanced Password Hashing (Type 8/9),Password Management,HIGH,FAIL,[FAIL] Required configuration not found: password [89],0,5,"Use Type-8 (PBKDF2-SHA-256) or Type-9 (scrypt) password hashing:
+switch(config)# username admin password 8 <password> role network-admin
+
+Type hierarchy (strongest to weakest):
+- Type 9: scrypt (strongest, recommended)
+- Type 8: PBKDF2-SHA-256 (strong)
+- Type 5: SHA-512 (acceptable)
+- Type 7: Vigenere (WEAK, easily reversed)
+- Type 0: Plaintext (NEVER use)
+",Cisco Hardening Guide | Management Plane
+NX-MP-027,Password Reuse Prevention,Password Management,MEDIUM,FAIL,[FAIL] Required configuration not found: password history,0,3,"Enable password history to prevent reuse:
+switch(config)# password history 5
+
+This prevents users from reusing the last 5 passwords
+",Cisco Hardening Guide | Management Plane
+NX-MP-006,SSH Feature Enabled,Secure Management,CRITICAL,PASS,Found: feature ssh,10,10,"Enable SSH:
+switch(config)# feature ssh
+",Management Plane > SSH | CIS 1.3.1
+NX-MP-007,SSH Key Configuration,Secure Management,CRITICAL,PASS,Found: ssh key rsa 2048,10,10,"Generate 2048-bit (or higher) RSA SSH key:
+switch(config)# ssh key rsa 2048
+
+For stronger security, use 4096-bit:
+switch(config)# ssh key rsa 4096
+
+Verify:
+show ssh key
+",Management Plane > SSH | CIS 1.3.2
+NX-MP-008,Telnet Feature Disabled,Disable Unused Services,CRITICAL,PASS,Insecure configuration correctly absent,10,10,"Disable telnet (insecure plaintext protocol):
+switch(config)# no feature telnet
+
+Use SSH instead for all management access
+",Management Plane > Disable Insecure Protocols | CIS 1.3.3
+NX-MP-036,SSH X.509 Certificate Authentication,Secure Management,LOW,FAIL,[FAIL] Required configuration not found: ssh certificate,0,1,"Configure SSH certificate authentication:
+switch(config)# ssh certificate <certificate-name>
+
+This provides stronger authentication than passwords
+",Cisco Hardening Guide | Management Plane
+NX-MP-009A,Console Session Timeout Configured,Session Management,MEDIUM,PASS,Console configured correctly,3,3,"Configure console timeout:
+switch(config)# line console
+switch(config-console)# exec-timeout 10
+
+Recommended: 10 minutes for console access
+",Management Plane > Console Security | CIS 1.4.1
+NX-MP-009B,Console Timeout Optimal Range,Session Management,LOW,PASS,Optimal value: 15 minutes (within 5-15 minutes range),1,1,"Adjust console timeout to optimal range (5-15 minutes):
+switch(config)# line console
+switch(config-console)# exec-timeout 10",Management Plane > Console Security | Best Practice
+NX-MP-010A,VTY Session Timeout Configured,Session Management,MEDIUM,PASS,1 VTY line(s) configured correctly,3,3,"Configure VTY timeout:
+switch(config)# line vty
+switch(config-line)# exec-timeout 10
+
+Recommended: 10 minutes for remote access
+Verify: show running-config | section ""line vty""
+",Management Plane > VTY Security | CIS 1.4.2
+NX-MP-010B,VTY Timeout Optimal Range,Session Management,LOW,PASS,Optimal value: 15 minutes (within 5-15 minutes range),1,1,"Adjust VTY timeout to optimal range (5-15 minutes):
+switch(config)# line vty
+switch(config-line)# exec-timeout 10",Management Plane > VTY Security | Best Practice
+NX-MP-010A,VTY Access-Class Applied,Session Management,HIGH,PASS,1 VTY line(s) configured correctly,5,5,"Apply access-class to VTY lines:
+switch(config)# ip access-list VTY-ACCESS
+switch(config-acl)# permit ip 10.1.1.0/24 any
+switch(config)# line vty
+switch(config-line)# access-class VTY-ACCESS in
+
+This restricts management access to authorized networks only
+",Management Plane > VTY Security | CIS 1.4.3
+NX-MP-011,SNMPv3 Configuration,SNMP Security,HIGH,PASS,Found: snmp-server user ops network-admin auth md5 49775C263C36C4664E22DBDFEBB137BABA7A priv aes-128 52023309278237DCE0DC4C193210FE6F6DB7 localizedV2key,5,5,"Configure SNMPv3 with authentication and privacy:
+switch(config)# snmp-server user admin network-admin auth sha <auth-password> priv aes-128 <priv-password>
+
+This provides encrypted SNMP communications
+",Management Plane > SNMP | CIS 1.5.1
+NX-MP-012,SNMP Default Community Strings Disabled,SNMP Security,CRITICAL,PASS,Insecure configuration correctly absent,10,10,"Remove default SNMP communities:
+switch(config)# no snmp-server community public
+switch(config)# no snmp-server community private
+
+Use SNMPv3 instead with strong authentication
+",Management Plane > SNMP | CIS 1.5.2
+NX-MP-033,SNMP Global Privacy Enforcement,SNMP Security,HIGH,PASS,Found: no snmp-server globalEnforcePriv,5,5,"Enforce privacy (encryption) for all SNMP communications:
+switch(config)# snmp-server globalEnforcePriv
+
+This ensures all SNMP traffic is encrypted, closing a common security gap
+",Cisco Hardening Guide | Management Plane | CRITICAL Security Gap #5
+NX-MP-034,RADIUS Over TLS,AAA Configuration,HIGH,FAIL,[FAIL] Required configuration not found: radius-server.*tls-version,0,5,"Configure RADIUS to use TLS:
+switch(config)# radius-server host 10.1.1.1 tls-version tlsv1.3
+
+This encrypts RADIUS communications
+",Cisco Hardening Guide | Management Plane
+NX-MP-035,LDAP Over TLS,AAA Configuration,HIGH,FAIL,[FAIL] Required configuration not found: ldap-server.*ssl-version,0,5,"Configure LDAP to use TLS:
+switch(config)# ldap-server host 10.1.1.1 ssl-version tlsv1.3
+
+Use port 636 (LDAPS) instead of port 389 (LDAP)
+",Cisco Hardening Guide | Management Plane
+NX-MP-013,Logging to Remote Server,Logging,HIGH,PASS,Found: logging server 10.253.182.93 5 port 514 use-vrf management facility kern,5,5,"Configure remote logging:
+switch(config)# logging server 10.1.1.100 6 use-vrf management
+
+Level 6 = informational (recommended minimum)
+",Management Plane > Logging | CIS 1.6.1
+NX-MP-014,Logging Source Interface,Logging,MEDIUM,PASS,Found: logging source-interface mgmt0,3,3,"Configure logging source interface:
+switch(config)# logging source-interface loopback0
+
+This ensures consistent source IP for syslog messages
+",Management Plane > Logging | CIS 1.6.2
+NX-MP-015,Logging Timestamp,Logging,MEDIUM,PASS,Found: logging timestamp milliseconds,3,3,"Configure logging with millisecond timestamps:
+switch(config)# logging timestamp milliseconds
+
+This provides precise timing for security event correlation
+",Management Plane > Logging | CIS 1.6.3
+NX-MP-016,Logging Facility,Logging,LOW,FAIL,[FAIL] Required configuration not found: ^logging facility,0,1,"Configure logging facility:
+switch(config)# logging facility local7
+
+This helps categorize syslog messages
+",Management Plane > Logging
+NX-MP-016A,Logging Level Configured,Logging,MEDIUM,PASS,Found: logging level urib 5,3,3,"Configure logging level:
+switch(config)# logging level 5
+
+Level 5 (notifications) is recommended minimum.",Management Plane > Logging
+NX-MP-016B,Logging Level Optimal Range,Logging,LOW,PASS,Optimal value: 5 (within 4-6 range),1,1,"Adjust logging level to optimal range (4-6):
+switch(config)# logging level 5
+
+Levels: 4=warnings, 5=notifications, 6=informational",Management Plane > Logging | Best Practice
+NX-MP-030,Console Logging Disabled,Logging,MEDIUM,PASS,Insecure configuration correctly absent,3,3,"Disable console logging:
+switch(config)# no logging console
+
+Console logging can impact performance during high event rates
+Use remote syslog instead
+",Cisco Hardening Guide | Management Plane
+NX-MP-030A,SSH Session Timeout Configured,SSH Security,MEDIUM,FAIL,[FAIL] Required configuration not found: ^ssh timeout,0,3,"Configure SSH session timeout:
+switch(config)# ssh timeout 600
+
+This sets idle timeout for SSH sessions.",Management Plane > SSH
+NX-MP-030B,SSH Timeout Optimal Range,SSH Security,LOW,FAIL,[FAIL] Configuration not found: ssh timeout,0,1,"Adjust SSH timeout to optimal range (300-900 seconds):
+switch(config)# ssh timeout 600
+
+Recommended: 600 seconds (10 minutes)",Management Plane > SSH | Best Practice
+NX-MP-031,Monitor Logging Disabled,Logging,MEDIUM,FAIL,[FAIL] Insecure configuration found: logging monitor 5,0,3,"Disable or limit monitor logging:
+switch(config)# no logging monitor
+OR
+switch(config)# logging monitor 6
+
+High verbosity monitor logging can impact terminal sessions
+",Cisco Hardening Guide | Management Plane
+NX-MP-032,Logging to File Enabled,Logging,HIGH,PASS,Found: logging logfile messages 5 size 4194304 persistent threshold 0,5,5,"Configure local log file:
+switch(config)# logging logfile messages 7 size 8388608
+
+This provides local backup of logs for troubleshooting
+",Cisco Hardening Guide | Management Plane
+NX-MP-028,CDP Disabled on Untrusted Interfaces,Discovery Protocols,HIGH,PASS,Insecure configuration correctly absent,5,5,"HIGH RISK: CDP exposes sensitive device information!
+
+Option 1 - Disable CDP globally (recommended):
+switch(config)# no feature cdp
+
+Option 2 - Disable on untrusted interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no cdp enable
+
+Why this matters:
+- CDP reveals: hostname, IOS version, platform, IP addresses
+- CDP packets are unencrypted and unauthenticated
+- Useful for attackers during reconnaissance
+- Not needed on customer-facing or untrusted interfaces
+
+CIS recommendation: Disable unless required for network management
+",Cisco Hardening Guide | Management Plane | CIS 1.7.1 | CRITICAL Security Gap #3
+NX-MP-029,LLDP Transmit Disabled on Untrusted Interfaces,Discovery Protocols,MEDIUM,FAIL,[FAIL] Insecure configuration found: lldp transmit,0,3,"Disable LLDP transmit on untrusted interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no lldp transmit
+
+LLDP reveals device information like CDP
+",Cisco Hardening Guide | Management Plane
+NX-MP-029A,SSH Login Attempts Configured,SSH Security,MEDIUM,PASS,Found: ssh login-attempts 3,3,3,"Configure SSH login attempts limit:
+switch(config)# ssh login-attempts 3
+
+This limits failed login attempts before lockout.",Management Plane > SSH | CIS 1.3.5
+NX-MP-029B,SSH Login Attempts Optimal Range,SSH Security,LOW,PASS,Optimal value: 3 attempts (within 2-5 attempts range),1,1,"Adjust SSH login attempts to optimal range (2-5):
+switch(config)# ssh login-attempts 3",Management Plane > SSH | Best Practice
+NX-MP-017,NTP Server Configuration,Time Synchronization,HIGH,PASS,Found: ntp server 10.251.4.4 use-vrf management,5,5,"Configure NTP servers:
+switch(config)# ntp server 10.1.1.200 use-vrf management
+switch(config)# ntp server 10.1.1.201 use-vrf management
+
+Accurate time is critical for:
+- Log correlation
+- Certificate validation
+- Security event analysis
+",Management Plane > NTP | CIS 1.8.1
+NX-MP-018,NTP Source Interface,Time Synchronization,MEDIUM,PASS,Found: ntp source-interface mgmt0,3,3,"Configure NTP source interface:
+switch(config)# ntp source-interface loopback0
+
+This ensures consistent source IP for NTP
+",Management Plane > NTP | CIS 1.8.2
+NX-MP-019,NTP Authenticate,Time Synchronization,HIGH,FAIL,[FAIL] Required configuration not found: ^ntp authenticate,0,5,"Enable NTP authentication:
+switch(config)# ntp authenticate
+switch(config)# ntp authentication-key 1 md5 <key> 7
+switch(config)# ntp trusted-key 1
+switch(config)# ntp server 10.1.1.200 key 1
+
+This prevents NTP spoofing attacks
+",Management Plane > NTP | CIS 1.8.3
+NX-MP-020,Login Banner,Compliance,MEDIUM,PASS,Found: banner motd ^,3,3,"Configure login banner:
+switch(config)# banner motd #
+******************************************************************
+*  AUTHORIZED ACCESS ONLY                                       *
+*  Unauthorized access is prohibited and will be prosecuted.    *
+******************************************************************
+#
+",Management Plane > Legal Notice | CIS 1.9.1
+NX-MP-021,HTTP Server Disabled,Disable Unused Services,HIGH,PASS,Insecure configuration correctly absent,5,5,"Disable HTTP server (use HTTPS only):
+switch(config)# no feature http-server
+
+HTTP traffic is unencrypted and vulnerable to interception
+",Management Plane > Disable Insecure Services | CIS 1.10.1
+NX-MP-022,HTTPS Certificate,Secure Management,MEDIUM,PASS,Found: crypto ca lookup local,3,3,"If HTTPS is required, configure proper certificate:
+switch(config)# crypto ca trustpoint HTTPS-CERT
+switch(config-trustpoint)# crypto ca import HTTPS-CERT certificate
+
+Verify: show crypto ca certificates
+",Management Plane > HTTPS Security
+NX-MP-023,FTP Feature Disabled,Disable Unused Services,HIGH,PASS,Insecure configuration correctly absent,5,5,"Disable FTP (insecure protocol):
+switch(config)# no feature ftp
+
+Use SCP/SFTP instead for file transfers
+",Management Plane > Disable Insecure Services
+NX-CP-001,Management ACL Configuration,Access Control,CRITICAL,PASS,Found: ip access-list 3,10,10,"Configure management ACL:
+switch(config)# ip access-list MGMT-ACCESS
+switch(config-acl)# permit ip 10.1.1.0/24 any
+switch(config-acl)# deny ip any any log
+
+Apply to management interfaces
+",Control Plane > ACL | CIS 2.1.1
+NX-CP-002,CoPP (Control Plane Policing),Rate Limiting,CRITICAL,FAIL,[FAIL] Required configuration not found: ^copp profile,0,10,"Enable CoPP:
+switch(config)# copp profile strict
+
+Or configure custom CoPP policy:
+switch(config)# class-map type control-plane match-any COPP-CRITICAL
+switch(config-cmap)# match access-group name CRITICAL-TRAFFIC
+switch(config)# policy-map type control-plane COPP-POLICY
+switch(config-pmap)# class COPP-CRITICAL
+switch(config-pmap-c)# police cir 2000 kbps bc 250 ms
+switch(config)# control-plane
+switch(config-cp)# service-policy input COPP-POLICY
+
+Verify: show policy-map interface control-plane
+",Control Plane > CoPP | CIS 2.2.1
+NX-CP-018,CoPP Template Selection,Rate Limiting,HIGH,FAIL,[FAIL] Required configuration not found: ^copp profile (strict|moderate),0,5,"Select appropriate CoPP template based on environment:
+
+For production (recommended):
+switch(config)# copp profile strict
+
+For less sensitive environments:
+switch(config)# copp profile moderate
+
+Verify active CoPP:
+show copp status
+",Cisco Hardening Guide | Control Plane
+NX-CP-003,BGP Password Authentication,Routing Security,HIGH,PASS,Found: no password strength-check,5,5,"Configure BGP password authentication:
+switch(config)# router bgp 65001
+switch(config-router)# neighbor 10.1.1.1 password <password>
+
+Use strong passwords for all BGP neighbors
+",Control Plane > BGP Security | CIS 2.3.1
+NX-CP-004,OSPF Authentication,Routing Security,HIGH,FAIL,[FAIL] Required configuration not found: ip ospf authentication,0,5,"Configure OSPF authentication:
+switch(config)# interface Ethernet1/1
+switch(config-if)# ip ospf authentication message-digest
+switch(config-if)# ip ospf message-digest-key 1 md5 <password>
+
+Or globally:
+switch(config-router)# area 0 authentication message-digest
+",Control Plane > OSPF Security | CIS 2.3.2
+NX-CP-005,EIGRP Authentication,Routing Security,HIGH,FAIL,[FAIL] Required configuration not found: ip authentication.*eigrp,0,5,"Configure EIGRP authentication:
+switch(config)# interface Ethernet1/1
+switch(config-if)# ip authentication mode eigrp 100 md5
+switch(config-if)# ip authentication key-chain eigrp 100 EIGRP-KEY
+",Control Plane > EIGRP Security | CIS 2.3.3
+NX-CP-006,BGP Maximum Prefix Limit,Routing Security,HIGH,FAIL,[FAIL] Required configuration not found: maximum-prefix,0,5,"Configure BGP maximum-prefix:
+switch(config)# router bgp 65001
+switch(config-router)# neighbor 10.1.1.1 maximum-prefix 1000 75
+
+This limits routes accepted from BGP neighbors
+",Control Plane > BGP Security | CIS 2.3.4
+NX-CP-007,BGP TTL Security,Routing Security,MEDIUM,FAIL,[FAIL] Required configuration not found: ttl-security,0,3,"Configure BGP TTL security:
+switch(config)# router bgp 65001
+switch(config-router)# neighbor 10.1.1.1 ttl-security hops 1
+
+This prevents BGP session hijacking from distant hosts
+",Control Plane > BGP Security
+NX-CP-019,BGP Log Neighbor Changes in All BGP VRFs,Routing Security,HIGH,PASS,log-neighbor-changes configured in default BGP VRF (no additional BGP VRFs found),5,5,"Configure BGP log-neighbor-changes in all BGP VRFs:
+For default/global BGP VRF:
+switch(config)# router bgp 65001
+switch(config-router)# log-neighbor-changes
+
+For BGP-enabled VRFs (VRFs under router bgp):
+switch(config)# router bgp 65001
+switch(config-router)# vrf <vrf-name>
+switch(config-router-vrf)# log-neighbor-changes
+
+Note: This check only validates VRFs that have BGP configuration.
+System VRFs without BGP (like management VRF) are not checked.
+
+This provides visibility into BGP neighbor state changes for troubleshooting and security monitoring.
+",Control Plane > BGP Security | Best Practice
+NX-DP-011,IP Source Routing Disabled,IP Security,HIGH,PASS,Found: no ip source-route,5,5,"HIGH RISK: IP source routing allows attackers to control packet routing!
+
+Disable IP source routing globally:
+switch(config)# no ip source-route
+
+Why this is critical:
+- Allows sender to specify packet route through network
+- Can bypass security controls and firewalls
+- Enables spoofing and man-in-the-middle attacks
+- Rarely needed in modern networks
+- Should be disabled unless explicitly required
+
+Verify:
+show running-config | include ""no ip source-route""
+",Cisco Hardening Guide | Data Plane | CIS 2.4.1 | CRITICAL Security Gap #4
+NX-CP-014,ICMP Redirects Disabled,IP Security,MEDIUM,FAIL,"[FAIL] 75 interface(s) failed: interface Vlan1, interface Vlan136, interface Vlan308...",0,3,"Disable ICMP redirects on all interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no ip redirects
+
+ICMP redirects can be used for network manipulation
+",Cisco Hardening Guide | Control Plane
+NX-CP-015,ICMP Unreachables Disabled,IP Security,LOW,FAIL,"[FAIL] 82 interface(s) failed: interface Vlan1, interface Vlan111, interface Vlan136...",0,1,"Disable ICMP unreachables on external interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no ip unreachables
+
+This prevents information disclosure
+",Cisco Hardening Guide | Control Plane
+NX-CP-016,Proxy ARP Disabled,IP Security,MEDIUM,FAIL,"[FAIL] 82 interface(s) failed: interface Vlan1, interface Vlan111, interface Vlan136...",0,3,"Disable proxy ARP on interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no ip proxy-arp
+
+Proxy ARP can be exploited for man-in-the-middle attacks
+",Cisco Hardening Guide | Control Plane
+NX-CP-017,NTP Authentication Keys,Time Synchronization,MEDIUM,FAIL,[FAIL] Required configuration not found: ^ntp authentication-key,0,3,"Configure NTP authentication keys:
+switch(config)# ntp authentication-key 1 md5 <strong-key> 7
+switch(config)# ntp trusted-key 1
+switch(config)# ntp server 10.1.1.200 key 1
+
+Use strong, unique keys for NTP authentication
+",Cisco Hardening Guide | Control Plane
+NX-CP-008,ARP Inspection (DAI),Layer 2 Security,HIGH,PASS,Found: no ip arp inspection validate src-mac dst-mac ip,5,5,"Enable Dynamic ARP Inspection:
+switch(config)# ip arp inspection vlan 10-20
+
+Configure trusted interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# ip arp inspection trust
+
+Verify: show ip arp inspection
+",Control Plane > ARP Security | CIS 2.5.1
+NX-CP-009,ARP Timeout,Layer 2 Security,LOW,PASS,Found: ip arp timeout 3600,1,1,"Configure ARP timeout:
+switch(config)# ip arp timeout 300
+
+Shorter timeouts reduce ARP cache poisoning window
+",Control Plane > ARP Security
+NX-CP-010,DHCP Snooping,Layer 2 Security,HIGH,PASS,Found: no ip dhcp snooping,5,5,"Enable DHCP snooping:
+switch(config)# feature dhcp
+switch(config)# ip dhcp snooping
+switch(config)# ip dhcp snooping vlan 10-20
+
+Configure trusted interfaces:
+switch(config)# interface Ethernet1/1
+switch(config-if)# ip dhcp snooping trust
+
+Verify: show ip dhcp snooping
+",Control Plane > DHCP Security | CIS 2.6.1
+NX-CP-011,IPv6 First Hop Security,IPv6 Security,MEDIUM,PASS,Found: no ipv6 nd raguard,3,3,"Configure IPv6 first hop security:
+switch(config)# ipv6 nd suppress-ra vlan 10-20
+switch(config)# ipv6 snooping policy IPV6-SNOOP
+switch(config-ipv6-snooping)# device-role switch
+
+This prevents IPv6 neighbor discovery attacks
+",Control Plane > IPv6 Security
+NX-CP-012,Route Filtering,Routing Security,HIGH,PASS,Found: no system default route-map validate-applied,5,5,"Configure route filtering:
+switch(config)# ip prefix-list ALLOWED-ROUTES permit 10.0.0.0/8
+switch(config)# router bgp 65001
+switch(config-router)# neighbor 10.1.1.1 prefix-list ALLOWED-ROUTES in
+
+This prevents route hijacking and black holes
+",Control Plane > Route Filtering
+NX-CP-013,Routing Protocol Loop Prevention,Routing Security,MEDIUM,PASS,Found: distance 110,3,3,"Configure loop prevention mechanisms based on routing protocol
+
+For EIGRP:
+switch(config-if)# ip split-horizon eigrp 100
+
+For BGP:
+switch(config-router)# neighbor 10.1.1.1 maximum-prefix 1000
+",Control Plane > Loop Prevention
+NX-DP-001,Port Security,Port Security,HIGH,FAIL,[FAIL] Required configuration not found: switchport port-security,0,5,"Configure port security:
+switch(config)# interface Ethernet1/1
+switch(config-if)# switchport mode access
+switch(config-if)# switchport port-security
+switch(config-if)# switchport port-security maximum 2
+switch(config-if)# switchport port-security violation restrict
+switch(config-if)# switchport port-security mac-address sticky
+
+Verify: show port-security
+",Data Plane > Port Security | CIS 3.1.1
+NX-DP-002,Trunk Native VLAN,VLAN Security,HIGH,FAIL,[FAIL] Required configuration not found: switchport trunk native vlan (?!1$),0,5,"Change trunk native VLAN from default:
+switch(config)# interface Ethernet1/1
+switch(config-if)# switchport trunk native vlan 999
+
+Use an unused VLAN for native VLAN
+",Data Plane > VLAN Security | CIS 3.2.1
+NX-DP-003,VLAN Access Lists (VACLs),VLAN Security,MEDIUM,FAIL,[FAIL] Required configuration not found: vlan access-map,0,3,"Configure VACLs:
+switch(config)# vlan access-map VLAN-FILTER 10
+switch(config-access-map)# match ip address ACL-FILTER
+switch(config-access-map)# action forward
+switch(config)# vlan filter VLAN-FILTER vlan-list 10
+
+Verify: show vlan access-map
+",Data Plane > VLAN Security | CIS 3.2.2
+NX-DP-004,DTP Disabled,VLAN Security,HIGH,FAIL,"[FAIL] 71 interface(s) failed: interface Vlan1, interface Vlan111, interface Vlan136...",0,5,"Disable DTP negotiation:
+switch(config)# interface Ethernet1/1
+switch(config-if)# switchport nonegotiate
+
+Manually configure trunk/access mode
+",Data Plane > VLAN Security
+NX-DP-005,Broadcast Storm Control,Storm Control,MEDIUM,PASS,Found: storm-control broadcast level 100.00,3,3,"Configure broadcast storm control:
+switch(config)# interface Ethernet1/1
+switch(config-if)# storm-control broadcast level 10
+
+This limits broadcast traffic to 10% of bandwidth
+",Data Plane > Storm Control | CIS 3.3.1
+NX-DP-006,Multicast Storm Control,Storm Control,MEDIUM,PASS,Found: storm-control multicast level 100.00,3,3,"Configure multicast storm control:
+switch(config)# interface Ethernet1/1
+switch(config-if)# storm-control multicast level 10
+",Data Plane > Storm Control | CIS 3.3.2
+NX-DP-007,Private VLAN Configuration,VLAN Security,LOW,FAIL,[FAIL] Required configuration not found: private-vlan,0,1,"Configure Private VLANs for layer 2 isolation:
+switch(config)# feature private-vlan
+switch(config)# vlan 100
+switch(config-vlan)# private-vlan primary
+switch(config-vlan)# private-vlan association 101
+switch(config)# vlan 101
+switch(config-vlan)# private-vlan isolated
+
+This provides intra-VLAN security
+",Data Plane > VLAN Security
+NX-DP-008,Unicast RPF,Anti-Spoofing,HIGH,FAIL,[FAIL] Required configuration not found: ip verify unicast source reachable-via,0,5,"Configure Unicast RPF:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no switchport
+switch(config-if)# ip verify unicast source reachable-via rx
+
+This prevents IP spoofing attacks
+",Data Plane > Anti-Spoofing | CIS 3.4.1
+NX-DP-009,IP Source Guard,Anti-Spoofing,HIGH,PASS,Found: no ip verify source dhcp-snooping-vlan,5,5,"Configure IP Source Guard:
+switch(config)# interface Ethernet1/1
+switch(config-if)# ip verify source dhcp-snooping-vlan
+
+Requires DHCP snooping to be enabled
+Verify: show ip verify source
+",Data Plane > Anti-Spoofing | CIS 3.4.2
+NX-DP-012,IP Directed Broadcast Disabled,IP Security,MEDIUM,FAIL,"[FAIL] 82 interface(s) failed: interface Vlan1, interface Vlan111, interface Vlan136...",0,3,"Disable IP directed broadcast:
+switch(config)# interface Ethernet1/1
+switch(config-if)# no ip directed-broadcast
+
+This prevents Smurf attacks
+",Cisco Hardening Guide | Data Plane
+NX-DP-013,Classification ACLs Present,QoS,LOW,PASS,Found: class-map type network-qos c-nq1,1,1,"Configure classification ACLs:
+switch(config)# class-map type qos match-all CLASS-VOICE
+switch(config-cmap-qos)# match access-group name VOICE-TRAFFIC
+
+This enables proper QoS treatment
+",Cisco Hardening Guide | Data Plane
+NX-DP-014,MAC Packet Classification,QoS,LOW,FAIL,[FAIL] Required configuration not found: mac packet-classify,0,1,"Enable MAC packet classification:
+switch(config)# mac packet-classify
+
+This improves QoS accuracy
+",Cisco Hardening Guide | Data Plane
+NX-DP-010,QoS Feature,QoS,LOW,FAIL,[FAIL] Required configuration not found: ^feature qos,0,1,"Enable QoS feature if traffic prioritization is required:
+switch(config)# feature qos
+
+Then configure QoS policies as needed
+",Data Plane > QoS
+NX-NS-001,vPC Domain Configuration,High Availability,MEDIUM,FAIL,[FAIL] Required configuration not found: ^vpc domain,0,3,"Configure vPC domain:
+switch(config)# vpc domain 1
+switch(config-vpc-domain)# peer-keepalive destination 10.1.1.2 source 10.1.1.1 vrf management
+switch(config-vpc-domain)# peer-gateway
+switch(config-vpc-domain)# auto-recovery
+
+Verify: show vpc
+",Nexus Specific > vPC | Best Practice
+NX-NS-002,vPC Peer-Keepalive,High Availability,HIGH,FAIL,[FAIL] Required configuration not found: peer-keepalive destination.*vrf management,0,5,"Configure peer-keepalive in management VRF:
+switch(config)# vpc domain 1
+switch(config-vpc-domain)# peer-keepalive destination 10.1.1.2 source 10.1.1.1 vrf management
+
+Using management VRF provides out-of-band keepalive
+",Nexus Specific > vPC | Best Practice
+NX-NS-007,ACI Fabric Secure Mode,ACI Security,HIGH,FAIL,[FAIL] Required configuration not found: fabric secure-mode,0,5,"Enable ACI fabric secure mode:
+switch(config)# fabric secure-mode
+
+This enables encrypted control plane communications in ACI
+",Cisco Hardening Guide | Unknown
+NX-NS-008,vPC Delay Restore,High Availability,MEDIUM,FAIL,[FAIL] Required configuration not found: delay restore,0,3,"Configure vPC delay restore:
+switch(config)# vpc domain 1
+switch(config-vpc-domain)# delay restore 150
+
+This prevents transient loops during recovery
+",Cisco Hardening Guide | Unknown
+NX-NS-003,VDC Resource Allocation,Resource Management,LOW,PASS,Found: vdc combined-hostname,1,1,"Configure VDC resource allocation (Nexus 7K):
+switch(config)# vdc Production
+switch(config-vdc)# limit-resource vlan minimum 100 maximum 500
+switch(config-vdc)# limit-resource port-channel minimum 10 maximum 50
+
+This provides resource isolation between VDCs
+",Nexus Specific > VDC
+NX-NS-004,FEX Feature,Fabric Extender,LOW,FAIL,[FAIL] Required configuration not found: ^feature fex,0,1,"Enable FEX feature:
+switch(config)# feature fex
+
+Then configure FEX associations
+",Nexus Specific > FEX
+NX-NS-005,VXLAN Feature,Overlay Networking,LOW,FAIL,[FAIL] Required configuration not found: ^feature nv overlay,0,1,"Enable VXLAN features:
+switch(config)# feature nv overlay
+switch(config)# feature vn-segment-vlan-based
+
+Then configure VXLAN tunnel endpoints
+",Nexus Specific > VXLAN
+NX-NS-006,Hardware Profile Configuration,System Health,MEDIUM,FAIL,[FAIL] Required configuration not found: ^hardware profile tcam,0,3,"Configure hardware TCAM profile based on deployment:
+
+For layer 2 environments:
+switch(config)# hardware profile tcam feature vpc mode l2
+
+For layer 3 environments:
+switch(config)# hardware profile tcam feature vpc mode l3
+
+Requires reload to take effect
+",Nexus Specific > System Health
+NX-MON-001,SPAN Session Configuration,Traffic Monitoring,LOW,FAIL,[FAIL] Required configuration not found: ^monitor session,0,1,"Configure SPAN for traffic monitoring:
+switch(config)# monitor session 1
+switch(config-monitor)# source interface Ethernet1/1
+switch(config-monitor)# destination interface Ethernet1/2
+
+Or configure ERSPAN for remote monitoring:
+switch(config)# monitor session 2 type erspan-source
+switch(config-erspan-src)# source interface Ethernet1/1
+switch(config-erspan-src)# destination ip 10.1.1.100
+switch(config-erspan-src)# erspan-id 100
+
+Verify: show monitor session all
+",Monitoring > SPAN
+NX-MON-001A,NTP Poll Interval Configured,Time Management,LOW,FAIL,[FAIL] Required configuration not found: ^ntp.*minpoll,0,1,"Configure NTP poll interval:
+switch(config)# ntp server 10.1.1.1 use-vrf management minpoll 6 maxpoll 10
+
+Minpoll value is 2^N seconds (6 = 64 seconds).",Monitoring > NTP
+NX-MON-001B,NTP Poll Optimal Range,Time Management,LOW,FAIL,[FAIL] Configuration not found: ntp.*minpoll,0,1,"Adjust NTP poll to optimal range (6-10):
+switch(config)# ntp server 10.1.1.1 minpoll 6 maxpoll 10
+
+Values: 6=64s, 7=128s, 8=256s, 9=512s, 10=1024s",Monitoring > NTP | Best Practice
+NX-MON-002,Call-Home Configuration,Proactive Monitoring,LOW,PASS,Found: callhome,1,1,"Configure Call-Home:
+switch(config)# callhome
+switch(config-callhome)# email-contact admin@company.com
+switch(config-callhome)# phone-contact +1-555-1234
+
+This enables proactive TAC support
+",Monitoring > Call-Home
+NX-MON-003,Smart Licensing,License Management,LOW,FAIL,[FAIL] Required configuration not found: ^feature smartlicense,0,1,"Enable Smart Licensing:
+switch(config)# feature smartlicense
+
+Then register with Cisco Smart Software Manager
+",Monitoring > Smart Licensing
+NX-MON-004,Configuration Checkpoints,Configuration Management,MEDIUM,FAIL,[FAIL] Required configuration not found: checkpoint,0,3,"Create configuration checkpoints before changes:
+switch# checkpoint stable-config
+
+Schedule automatic checkpoints:
+switch(config)# scheduler aaa-authentication password <password>
+switch(config)# scheduler job name backup-config
+switch(config-job)# checkpoint file bootflash:backup-config
+switch(config)# scheduler schedule name daily-backup
+switch(config-schedule)# time daily 23:00
+switch(config-schedule)# job name backup-config
+
+Verify: show checkpoint summary
+",Monitoring > Configuration Management | CIS 4.1.1
+NX-MON-005,Scheduler Feature Enabled,Configuration Management,MEDIUM,PASS,Found: feature scheduler,3,3,"Enable scheduler feature:
+switch(config)# feature scheduler
+
+This enables automated configuration backups and maintenance tasks
+",Cisco Hardening Guide | Monitoring
+NX-MON-006,Automated Configuration Backups,Configuration Management,MEDIUM,FAIL,[FAIL] Required configuration not found: scheduler.*backup,0,3,"Schedule automated configuration backups:
+switch(config)# scheduler job name config-backup
+switch(config-job)# copy running-config bootflash:config-backup-$(TIMESTAMP).cfg
+switch(config)# scheduler schedule name daily-backup
+switch(config-schedule)# time daily 02:00
+switch(config-schedule)# job name config-backup
+
+Verify: show scheduler schedule
+",Cisco Hardening Guide | Monitoring
+NX-MON-007,NetFlow Feature Enabled,Traffic Analysis,MEDIUM,FAIL,[FAIL] Required configuration not found: ^feature netflow,0,3,"Enable NetFlow:
+switch(config)# feature netflow
+
+Configure NetFlow export:
+switch(config)# flow exporter NETFLOW-EXPORT
+switch(config-flow-exporter)# destination 10.1.1.100
+switch(config-flow-exporter)# transport udp 2055
+switch(config-flow-exporter)# source mgmt0
+
+Apply to interfaces for traffic visibility
+",Cisco Hardening Guide | Monitoring
+NX-MON-008,AAA Command Accounting,Audit Logging,HIGH,FAIL,[FAIL] Required configuration not found: aaa accounting.*command,0,5,"Configure AAA command accounting:
+switch(config)# aaa accounting commands default group tacacs+
+
+This logs all commands executed for security audits
+Verify: show aaa accounting
+",Cisco Hardening Guide | Monitoring
